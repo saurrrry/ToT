@@ -29,6 +29,9 @@ class SolverResult:
     # 输出 token 数。
     completion_tokens: int | None
 
+    # 本次 solve 实际调用模型的次数。
+    model_calls: int
+
     # 以后 ToT/MCTS 可以在这里保存搜索树信息。
     metadata: dict[str, Any]
 

@@ -417,5 +417,6 @@ class Game24ToTSolver(BaseSolver):
                 value_evaluator
                 .completion_tokens
             ),
+            model_calls=value_evaluator.model_calls,
             metadata=metadata,
         )

@@ -51,6 +51,7 @@ class CoTSolver(BaseSolver):
             duration_seconds=generation.duration_seconds,
             prompt_tokens=generation.prompt_tokens,
             completion_tokens=generation.completion_tokens,
+            model_calls=1,
             metadata={
                 "method": self.name,
                 "model": generation.model,

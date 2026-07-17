@@ -3,10 +3,10 @@ from __future__ import annotations
 import heapq
 from itertools import count
 
-from .generator import (
+from solvers.game24_tot.generator import (
     generate_successors,
 )
-from .state import (
+from solvers.game24_tot.state import (
     SearchResult,
     State,
     StateScorer,
@@ -21,7 +21,10 @@ def astar_search(
     max_expanded_nodes: int = 1000,
 ) -> SearchResult:
     """
-    使用模型评分作为启发式函数的 A* 搜索。
+    LLM-guided weighted A*-style search.
+
+    The model-derived heuristic is not guaranteed to be admissible,
+    so this implementation does not guarantee classical A* optimality.
 
     优先级：
 

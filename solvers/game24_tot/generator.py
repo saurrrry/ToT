@@ -3,7 +3,7 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import combinations
 
-from .state import (
+from solvers.game24_tot.state import (
     State,
     Term,
     create_state,

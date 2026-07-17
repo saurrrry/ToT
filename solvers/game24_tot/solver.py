@@ -3,31 +3,31 @@ from __future__ import annotations
 import json
 from typing import Literal
 
-from ...datasets.game24 import Game24Sample
-from ...models.base_model import BaseModel
-from ...prompts.game24_prompt import (
+from datasets.game24 import Game24Sample
+from models.base_model import BaseModel
+from prompts.game24_prompt import (
     build_value_prompt,
 )
-from ..base_solver import (
+from solvers.base_solver import (
     BaseSolver,
     SolverResult,
 )
-from .astar import (
+from solvers.game24_tot.astar import (
     astar_search,
 )
-from .bfs import (
+from solvers.game24_tot.bfs import (
     bfs_search,
 )
-from .dfs import (
+from solvers.game24_tot.dfs import (
     dfs_search,
 )
-from .mcts import (
+from solvers.game24_tot.mcts import (
     mcts_search,
 )
-from .state import (
+from solvers.game24_tot.state import (
     State,
 )
-from ...utils.parsing import parse_state_scores
+from utils.parsing import parse_state_scores
 
 
 SearchStrategy = Literal[
@@ -107,6 +107,10 @@ class StateValueEvaluator:
                 self.cache[state.key] = 1.0
                 continue
 
+            if state.is_terminal():
+                self.cache[state.key] = 0.0
+                continue
+
             if state.key in self.cache:
                 continue
 
@@ -171,14 +175,18 @@ class StateValueEvaluator:
                 generation.duration_seconds
             )
 
-        scores = parse_state_scores(
+        parse_result = parse_state_scores(
             generation.text,
             expected_count=len(states),
         )
+        scores = parse_result.scores
 
         batch_log = {
             "prompt": prompt,
             "raw_response": generation.text,
+            "scores": scores,
+            "parse_success": parse_result.success,
+            "parse_reason": parse_result.reason,
             "ratings": [],
         }
 
@@ -215,7 +223,8 @@ class Game24ToTSolver(BaseSolver):
         *,
         strategy: SearchStrategy = "bfs",
         temperature: float = 0.0,
-        max_tokens: int = 512,
+        max_tokens: int | None = None,
+        value_max_tokens: int = 128,
         value_batch_size: int = 20,
         beam_width: int = 10,
         dfs_branch_limit: int | None = None,
@@ -228,7 +237,11 @@ class Game24ToTSolver(BaseSolver):
         self.strategy = strategy
 
         self.temperature = temperature
-        self.max_tokens = max_tokens
+        self.max_tokens = (
+            value_max_tokens
+            if max_tokens is None
+            else max_tokens
+        )
         self.value_batch_size = value_batch_size
 
         self.beam_width = beam_width

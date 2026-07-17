@@ -4,10 +4,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..datasets.game24 import Game24Sample
-from ..solvers.base_solver import BaseSolver
-from ..utils.result_io import save_json
-from ..verifier.game24 import (
+from datasets.game24 import Game24Sample
+from solvers.base_solver import BaseSolver
+from utils.result_io import save_json
+from verifier.game24 import (
     VerificationResult,
     verify_24_expression,
 )
@@ -167,11 +167,6 @@ def evaluate_game24(
             {},
         )
 
-        value_metadata = solver_metadata.get(
-            "value_evaluator",
-            {},
-        )
-
         expanded_nodes = _safe_int(
             search_metadata.get("expanded_nodes")
         )
@@ -180,8 +175,10 @@ def evaluate_game24(
             search_metadata.get("generated_nodes")
         )
 
-        model_calls = _safe_int(
-            value_metadata.get("model_calls")
+        model_calls = (
+            solver_result.model_calls
+            if solver_result is not None
+            else 0
         )
 
         total_expanded_nodes += expanded_nodes
@@ -227,7 +224,10 @@ def evaluate_game24(
 
         sample_result = {
             "index": index,
-            "numbers": sample.numbers,
+            "id": sample.id,
+            "numbers": list(sample.numbers),
+            "input_text": sample.input_text,
+            "sample_seed": sample_seed,
             "expression": expression,
             "raw_output": _compact_raw_output(
                 solver_metadata,
@@ -246,6 +246,7 @@ def evaluate_game24(
                 ),
                 "reason": verification.reason,
             },
+            "dataset_metadata": sample.metadata,
         }
 
         if duration_seconds is not None:

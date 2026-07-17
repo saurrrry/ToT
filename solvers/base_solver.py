@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
-from ..datasets.game24 import Game24Sample
+from datasets.game24 import Game24Sample
 
 
 @dataclass(frozen=True)

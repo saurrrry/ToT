@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 from typing import Any
 
-if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    __package__ = "ToT.Tot_mcts"
-
-from .config import (
+from config import (
     DEFAULT_ASTAR_HEURISTIC_WEIGHT,
+    DEFAULT_BASELINE_MAX_TOKENS,
     DEFAULT_BEAM_WIDTH,
+    DEFAULT_CONTEXT_LENGTH,
+    DEFAULT_COT_MAX_TOKENS,
     DEFAULT_DATA_PATH,
     DEFAULT_DFS_BRANCH_LIMIT,
+    DEFAULT_KEEP_ALIVE,
     DEFAULT_LIMIT,
     DEFAULT_MAX_EXPANDED_NODES,
     DEFAULT_MAX_TOKENS,
@@ -26,19 +25,20 @@ from .config import (
     DEFAULT_RESULTS_DIR,
     DEFAULT_TEMPERATURE,
     DEFAULT_VALUE_BATCH_SIZE,
+    DEFAULT_VALUE_MAX_TOKENS,
 )
-from .datasets.game24 import (
+from datasets.game24 import (
     Game24Sample,
     load_game24_dataset,
 )
-from .evaluation.game24_evaluator import (
+from evaluation.game24_evaluator import (
     evaluate_game24,
 )
-from .models.ollama_model import OllamaModel
-from .solvers.base_solver import BaseSolver
-from .solvers.baseline import BaselineSolver
-from .solvers.cot import CoTSolver
-from .solvers.game24_tot import (
+from models.ollama_model import OllamaModel
+from solvers.base_solver import BaseSolver
+from solvers.baseline import BaselineSolver
+from solvers.cot import CoTSolver
+from solvers.game24_tot import (
     Game24ToTSolver,
 )
 
@@ -155,6 +155,34 @@ def parse_args() -> argparse.Namespace:
             "Maximum number of tokens generated "
             "for one model request."
         ),
+    )
+
+    parser.add_argument(
+        "--num-ctx",
+        type=int,
+        default=DEFAULT_CONTEXT_LENGTH,
+        help="Ollama context window size in tokens.",
+    )
+
+    parser.add_argument(
+        "--baseline-max-tokens",
+        type=int,
+        default=DEFAULT_BASELINE_MAX_TOKENS,
+        help="Maximum generated tokens for baseline.",
+    )
+
+    parser.add_argument(
+        "--cot-max-tokens",
+        type=int,
+        default=DEFAULT_COT_MAX_TOKENS,
+        help="Maximum generated tokens for CoT.",
+    )
+
+    parser.add_argument(
+        "--value-max-tokens",
+        type=int,
+        default=DEFAULT_VALUE_MAX_TOKENS,
+        help="Maximum generated tokens for ToT value scoring.",
     )
 
     parser.add_argument(
@@ -292,7 +320,9 @@ def main() -> None:
         model_name=args.model,
         base_url=args.ollama_url,
         default_temperature=args.temperature,
-        default_max_tokens=args.max_tokens,
+        default_max_tokens=args.cot_max_tokens,
+        default_context_length=args.num_ctx,
+        keep_alive=DEFAULT_KEEP_ALIVE,
         timeout=DEFAULT_REQUEST_TIMEOUT,
     )
 
@@ -302,6 +332,11 @@ def main() -> None:
         "shuffle": not args.no_shuffle,
         "temperature": args.temperature,
         "max_tokens": args.max_tokens,
+        "num_ctx": args.num_ctx,
+        "baseline_max_tokens": args.baseline_max_tokens,
+        "cot_max_tokens": args.cot_max_tokens,
+        "value_max_tokens": args.value_max_tokens,
+        "keep_alive": DEFAULT_KEEP_ALIVE,
         "ollama_url": args.ollama_url,
         "limit": args.limit,
         "seed": args.seed,
@@ -385,17 +420,14 @@ def _create_solver(
 
             # Baseline 只输出一行表达式，
             # 不需要与 CoT 相同的长输出。
-            max_tokens=min(
-                args.max_tokens,
-                256,
-            ),
+            max_tokens=args.baseline_max_tokens,
         )
 
     if method_name == "cot":
         return CoTSolver(
             model,
             temperature=args.temperature,
-            max_tokens=args.max_tokens,
+            max_tokens=args.cot_max_tokens,
         )
 
     if method_name in TOT_METHODS:
@@ -405,7 +437,7 @@ def _create_solver(
             model,
             strategy=strategy,
             temperature=args.temperature,
-            max_tokens=args.max_tokens,
+            value_max_tokens=args.value_max_tokens,
             value_batch_size=(
                 args.value_batch_size
             ),
@@ -551,6 +583,26 @@ def _validate_args(
     if args.max_tokens <= 0:
         raise ValueError(
             "--max-tokens must be positive"
+        )
+
+    if args.num_ctx <= 0:
+        raise ValueError(
+            "--num-ctx must be positive"
+        )
+
+    if args.baseline_max_tokens <= 0:
+        raise ValueError(
+            "--baseline-max-tokens must be positive"
+        )
+
+    if args.cot_max_tokens <= 0:
+        raise ValueError(
+            "--cot-max-tokens must be positive"
+        )
+
+    if args.value_max_tokens <= 0:
+        raise ValueError(
+            "--value-max-tokens must be positive"
         )
 
     if args.temperature < 0:

@@ -1,4 +1,4 @@
-from .solver import (
+from solvers.game24_tot.solver import (
     Game24ToTSolver,
 )
 

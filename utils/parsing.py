@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -258,10 +259,17 @@ RATING_TO_SCORE = {
 }
 
 
+@dataclass(frozen=True)
+class ScoreParseResult:
+    scores: list[float]
+    success: bool
+    reason: str
+
+
 def parse_state_scores(
     response: str,
     expected_count: int,
-) -> list[float]:
+) -> ScoreParseResult:
     """
     Parse compact ToT state scores.
 
@@ -277,7 +285,11 @@ def parse_state_scores(
         )
 
     if expected_count == 0:
-        return []
+        return ScoreParseResult(
+            scores=[],
+            success=True,
+            reason="empty batch",
+        )
 
     cleaned = _remove_code_fence(
         response.strip()
@@ -286,8 +298,10 @@ def parse_state_scores(
     data = _parse_json_object(cleaned)
 
     if data is None:
-        return _default_scores(
-            expected_count
+        return ScoreParseResult(
+            scores=_default_scores(expected_count),
+            success=False,
+            reason="invalid JSON object",
         )
 
     scores = _parse_scores_array(
@@ -296,15 +310,35 @@ def parse_state_scores(
     )
 
     if scores is not None:
-        return scores
-
-    return [
-        RATING_TO_SCORE[rating]
-        for rating in parse_state_ratings(
-            response,
-            expected_count,
+        return ScoreParseResult(
+            scores=scores,
+            success=True,
+            reason="valid scores",
         )
-    ]
+
+    ratings = _parse_state_ratings_result(
+        response,
+        expected_count,
+    )
+
+    if ratings.success:
+        return ScoreParseResult(
+            scores=[
+                RATING_TO_SCORE[rating]
+                for rating in ratings.ratings
+            ],
+            success=True,
+            reason="valid legacy ratings",
+        )
+
+    return ScoreParseResult(
+        scores=_default_scores(expected_count),
+        success=False,
+        reason=(
+            "scores must contain exactly "
+            f"{expected_count} numeric values in [0, 1]"
+        ),
+    )
 
 
 def _parse_scores_array(
@@ -314,12 +348,12 @@ def _parse_scores_array(
     if not isinstance(raw_scores, list):
         return None
 
-    if len(raw_scores) < expected_count:
+    if len(raw_scores) != expected_count:
         return None
 
     scores: list[float] = []
 
-    for raw_score in raw_scores[:expected_count]:
+    for raw_score in raw_scores:
         if isinstance(raw_score, bool):
             return None
 
@@ -328,15 +362,19 @@ def _parse_scores_array(
 
         score = float(raw_score)
 
-        if score < 0.0:
-            score = 0.0
-
-        if score > 1.0:
-            score = 1.0
+        if not 0.0 <= score <= 1.0:
+            return None
 
         scores.append(score)
 
     return scores
+
+
+@dataclass(frozen=True)
+class RatingParseResult:
+    ratings: list[str]
+    success: bool
+    reason: str
 
 
 def parse_state_ratings(
@@ -379,13 +417,27 @@ def parse_state_ratings(
         4. 模型错误输出 Markdown JSON code block：
            自动删除 ```json 和 ```。
     """
+    return _parse_state_ratings_result(
+        response,
+        expected_count,
+    ).ratings
+
+
+def _parse_state_ratings_result(
+    response: str,
+    expected_count: int,
+) -> RatingParseResult:
     if expected_count < 0:
         raise ValueError(
             "expected_count must be non-negative"
         )
 
     if expected_count == 0:
-        return []
+        return RatingParseResult(
+            ratings=[],
+            success=True,
+            reason="empty batch",
+        )
 
     cleaned = _remove_code_fence(
         response.strip()
@@ -394,15 +446,29 @@ def parse_state_ratings(
     data = _parse_json_object(cleaned)
 
     if data is None:
-        return _default_ratings(
-            expected_count
+        return RatingParseResult(
+            ratings=_default_ratings(expected_count),
+            success=False,
+            reason="invalid JSON object",
         )
 
     raw_ratings = data.get("ratings")
 
     if not isinstance(raw_ratings, list):
-        return _default_ratings(
-            expected_count
+        return RatingParseResult(
+            ratings=_default_ratings(expected_count),
+            success=False,
+            reason="missing ratings list",
+        )
+
+    if len(raw_ratings) != expected_count:
+        return RatingParseResult(
+            ratings=_default_ratings(expected_count),
+            success=False,
+            reason=(
+                "ratings must contain exactly "
+                f"{expected_count} items"
+            ),
         )
 
     parsed_by_id: dict[int, str] = {}
@@ -450,7 +516,7 @@ def parse_state_ratings(
             normalized_rating
         )
 
-    return [
+    ratings = [
         parsed_by_id.get(
             state_id,
             "maybe",
@@ -460,6 +526,14 @@ def parse_state_ratings(
             expected_count + 1,
         )
     ]
+
+    success = len(parsed_by_id) == expected_count
+
+    return RatingParseResult(
+        ratings=ratings,
+        success=success,
+        reason="valid ratings" if success else "missing or invalid rating",
+    )
 
 
 def _remove_code_fence(

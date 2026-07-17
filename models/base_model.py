@@ -40,6 +40,7 @@ class BaseModel(ABC):
         temperature: float | None = None,
         max_tokens: int | None = None,
         seed: int | None = None,
+        context_length: int | None = None,
     ) -> GenerationResult:
         """
         Generate one response for a prompt.

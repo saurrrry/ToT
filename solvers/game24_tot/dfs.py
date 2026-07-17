@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from .generator import (
+from solvers.game24_tot.generator import (
     generate_successors,
 )
-from .state import (
+from solvers.game24_tot.state import (
     SearchResult,
     State,
     StateScorer,

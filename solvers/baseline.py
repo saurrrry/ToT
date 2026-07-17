@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from ..datasets.game24 import Game24Sample
-from ..models.base_model import BaseModel
-from ..prompts.game24_prompt import build_baseline_prompt
-from ..utils.parsing import extract_final_expression
-from .base_solver import BaseSolver, SolverResult
+from datasets.game24 import Game24Sample
+from models.base_model import BaseModel
+from prompts.game24_prompt import build_baseline_prompt
+from solvers.base_solver import BaseSolver, SolverResult
+from utils.parsing import extract_final_expression
 
 
 class BaselineSolver(BaseSolver):

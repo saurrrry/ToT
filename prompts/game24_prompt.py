@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..solvers.game24_tot.state import State
+    from solvers.game24_tot.state import State
 
 BASELINE_PROMPT = """You are solving one Game of 24 puzzle.
 Use numbers and basic arithmetic operations (+ - * /) to obtain 24.
@@ -111,8 +111,8 @@ def build_value_prompt(
     """
     lines = [
         (
-            "You are evaluating intermediate states "
-            "for the Game of 24."
+            "Evaluate whether each remaining-number state "
+            "can still reach exactly 24."
         ),
         (
             "Each state contains the remaining values "
@@ -127,26 +127,27 @@ def build_value_prompt(
             "reaching exactly 24 using only +, -, *, and /."
         ),
         "",
-        "Use numeric scores only:",
-        "- 1.0: the state is already 24 or can clearly reach 24",
-        "- 0.75: the state is highly promising",
-        "- 0.35: the state may or may not reach 24",
-        "- 0.0: the state cannot reach 24",
+        "Scores:",
+        "1.0 = definitely solvable",
+        "0.75 = highly promising",
+        "0.35 = uncertain",
+        "0.0 = impossible",
         "",
         "Return JSON only.",
         "Do not include explanations.",
         "Do not use Markdown or code blocks.",
-        "Return exactly one score per state, in the same order.",
+        "Return exactly one score for every state, in the same order.",
         "",
-        "Required format:",
+        "Return only compact JSON:",
         '{"scores":[1.0,0.75,0.35,0.0]}',
         "",
         "Examples:",
         "1. remaining values: 24; score: 1.0",
         "2. remaining values: 10 14; score: 1.0",
-        "3. remaining values: 6 4; score: 0.75",
-        "4. remaining values: 1 5 9; score: 0.35",
-        "5. remaining values: 1 1 1; score: 0.0",
+        "3. remaining values: 6 4; score: 1.0",
+        "4. remaining values: 3 8; score: 1.0",
+        "5. remaining values: 5 5; score: 0.0",
+        "6. remaining values: 1 1 1; score: 0.0",
         "",
         "States to evaluate:",
     ]

@@ -15,10 +15,10 @@ class Game24Sample:
     id: str
 
     # 四个输入数字
-    numbers: list[int]
+    numbers: tuple[int, int, int, int]
 
     # 数据集中给出的参考解
-    solutions: list[str]
+    solutions: tuple[str, ...]
 
     # 该题是否存在解
     solvable: bool
@@ -129,29 +129,37 @@ def _parse_sample(
             f"{sorted(missing_fields)}"
         )
 
-    numbers = item["numbers"]
+    raw_numbers = item["numbers"]
 
-    if not isinstance(numbers, list):
+    if not isinstance(raw_numbers, list):
         raise ValueError(
             f"'numbers' must be a list at line {line_number}"
         )
 
-    if len(numbers) != 4:
+    if len(raw_numbers) != 4:
         raise ValueError(
             f"Expected exactly four numbers at line {line_number}, "
-            f"got {len(numbers)}"
+            f"got {len(raw_numbers)}"
         )
 
-    if not all(type(number) is int for number in numbers):
+    if not all(type(number) is int for number in raw_numbers):
         raise ValueError(
             f"All Game24 numbers must be integers at line {line_number}"
         )
 
-    solutions = item["solutions"]
+    raw_solutions = item["solutions"]
 
-    if not isinstance(solutions, list):
+    if not isinstance(raw_solutions, list):
         raise ValueError(
             f"'solutions' must be a list at line {line_number}"
+        )
+
+    raw_solvable = item["solvable"]
+
+    if type(raw_solvable) is not bool:
+        raise ValueError(
+            f"'solvable' must be bool at line {line_number}, "
+            f"got {raw_solvable!r}"
         )
 
     # 除去主要字段后，其他字段都作为 metadata 保存。
@@ -169,8 +177,16 @@ def _parse_sample(
 
     return Game24Sample(
         id=str(item["id"]),
-        numbers=numbers,
-        solutions=[str(solution) for solution in solutions],
-        solvable=bool(item["solvable"]),
+        numbers=(
+            raw_numbers[0],
+            raw_numbers[1],
+            raw_numbers[2],
+            raw_numbers[3],
+        ),
+        solutions=tuple(
+            str(solution)
+            for solution in raw_solutions
+        ),
+        solvable=raw_solvable,
         metadata=metadata,
     )

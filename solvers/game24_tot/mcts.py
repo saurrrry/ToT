@@ -4,10 +4,10 @@ import math
 import random
 from dataclasses import dataclass, field
 
-from .generator import (
+from solvers.game24_tot.generator import (
     generate_successors,
 )
-from .state import (
+from solvers.game24_tot.state import (
     SearchResult,
     State,
     StateScorer,
@@ -61,7 +61,10 @@ def mcts_search(
     max_expanded_nodes: int = 1000,
 ) -> SearchResult:
     """
-    使用 Qwen 状态评分作为叶节点价值的 MCTS。
+    Value-based MCTS.
+
+    Leaf rewards are derived from Qwen state scores instead of full
+    random rollouts, so this is not a standard rollout-based MCTS.
     """
     if initial_state.is_goal():
         return SearchResult(

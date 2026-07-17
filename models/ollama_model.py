@@ -5,7 +5,7 @@ from typing import Any
 
 import requests
 
-from .base_model import BaseModel, GenerationResult
+from models.base_model import BaseModel, GenerationResult
 
 
 class OllamaModel(BaseModel):
@@ -18,6 +18,8 @@ class OllamaModel(BaseModel):
         base_url: str = "http://localhost:11434",
         default_temperature: float = 0.0,
         default_max_tokens: int = 512,
+        default_context_length: int = 2048,
+        keep_alive: str = "30m",
         timeout: int = 300,
     ) -> None:
         # 去掉地址最后的斜杠，避免拼接后出现双斜杠。
@@ -26,6 +28,8 @@ class OllamaModel(BaseModel):
         self.model_name = model_name
         self.default_temperature = default_temperature
         self.default_max_tokens = default_max_tokens
+        self.default_context_length = default_context_length
+        self.keep_alive = keep_alive
         self.timeout = timeout
 
     def generate(
@@ -35,6 +39,7 @@ class OllamaModel(BaseModel):
         temperature: float | None = None,
         max_tokens: int | None = None,
         seed: int | None = None,
+        context_length: int | None = None,
     ) -> GenerationResult:
         # 如果调用者没有单独提供参数，就使用模型实例的默认参数。
         selected_temperature = (
@@ -49,12 +54,18 @@ class OllamaModel(BaseModel):
             else max_tokens
         )
 
+        selected_context_length = (
+            self.default_context_length
+            if context_length is None
+            else context_length
+        )
+
         options: dict[str, Any] = {
             "temperature": selected_temperature,
 
             # Ollama 中 num_predict 表示最多生成多少 token。
             "num_predict": selected_max_tokens,
-            "num_ctx": 2048,  # 上下文窗口大小，单位为 token。
+            "num_ctx": selected_context_length,
         }
 
         if seed is not None:
@@ -67,6 +78,7 @@ class OllamaModel(BaseModel):
             # 关闭流式响应，让 requests 一次拿到完整 JSON。
             "stream": False,
 
+            "keep_alive": self.keep_alive,
             "options": options,
         }
 

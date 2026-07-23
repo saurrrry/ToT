@@ -10,7 +10,6 @@ __pycache__/
 venv/
 env/
 
-results/
 tests/.tmp/
 data/.cache/
 data/**/.cache/

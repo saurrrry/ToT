@@ -37,7 +37,7 @@ The project compares direct input-output prompting, Chain-of-Thought prompting, 
 │   └── gsm8k_tot/             GSM8K ToT-BFS implementation
 ├── utils/                     Parsing and result I/O helpers
 ├── verifier/                  Exact answer verifiers
-└── experiments.txt            Example experiment command log
+└── results/                   Saved experiment result JSON files
 ```
 
 ## Environment
@@ -209,11 +209,9 @@ Each result JSON contains:
 - duration, token counts, and model-call counts;
 - search metadata such as expanded and generated nodes when applicable.
 
-`results/` is ignored by Git because experiment traces can become large.
+The saved result files are included in this repository so the reported runs can be inspected without rerunning the model.
 
-## Example Experiment Commands
-
-See `experiments.txt` for the local command log used during experiments.
+## Example Commands
 
 Typical GSM8K ToT-BFS sweep:
 

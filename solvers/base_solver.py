@@ -4,9 +4,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
-from datasets.game24 import Game24Sample
-
-
 @dataclass(frozen=True)
 class SolverResult:
     """Standard output produced by every solving method."""
@@ -44,9 +41,9 @@ class BaseSolver(ABC):
     @abstractmethod
     def solve(
         self,
-        sample: Game24Sample,
+        sample: Any,
         *,
         seed: int | None = None,
     ) -> SolverResult:
-        """Solve one Game of 24 sample."""
+        """Solve one dataset sample."""
         raise NotImplementedError

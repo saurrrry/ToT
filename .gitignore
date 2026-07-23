@@ -12,6 +12,14 @@ env/
 
 results/
 tests/.tmp/
+data/.cache/
+data/**/.cache/
+data/gsm8k/temp.py
+*.listing
+*.aux
+*.log
+*.out
+*.toc
 
 .DS_Store
 Thumbs.db

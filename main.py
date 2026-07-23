@@ -12,6 +12,13 @@ from config import (
     DEFAULT_COT_MAX_TOKENS,
     DEFAULT_DATA_PATH,
     DEFAULT_DFS_BRANCH_LIMIT,
+    DEFAULT_GSM8K_BASELINE_MAX_TOKENS,
+    DEFAULT_GSM8K_COT_MAX_TOKENS,
+    DEFAULT_GSM8K_DATA_PATH,
+    DEFAULT_GSM8K_TOT_BRANCH_FACTOR,
+    DEFAULT_GSM8K_TOT_GENERATION_TEMPERATURE,
+    DEFAULT_GSM8K_TOT_MAX_DEPTH,
+    DEFAULT_GSM8K_TOT_STEP_MAX_TOKENS,
     DEFAULT_KEEP_ALIVE,
     DEFAULT_LIMIT,
     DEFAULT_MAX_EXPANDED_NODES,
@@ -23,6 +30,8 @@ from config import (
     DEFAULT_RANDOM_SEED,
     DEFAULT_REQUEST_TIMEOUT,
     DEFAULT_RESULTS_DIR,
+    DEFAULT_SELF_CONSISTENCY_SAMPLES,
+    DEFAULT_SELF_CONSISTENCY_TEMPERATURE,
     DEFAULT_TEMPERATURE,
     DEFAULT_VALUE_BATCH_SIZE,
     DEFAULT_VALUE_MAX_TOKENS,
@@ -31,15 +40,32 @@ from datasets.game24 import (
     Game24Sample,
     load_game24_dataset,
 )
+from datasets.gsm8k import (
+    GSM8KSample,
+    load_gsm8k_dataset,
+)
 from evaluation.game24_evaluator import (
     evaluate_game24,
 )
+from evaluation.gsm8k_evaluator import (
+    evaluate_gsm8k,
+)
 from models.ollama_model import OllamaModel
 from solvers.base_solver import BaseSolver
-from solvers.baseline import BaselineSolver
-from solvers.cot import CoTSolver
+from solvers.baseline import (
+    BaselineSolver,
+    GSM8KBaselineSolver,
+)
+from solvers.cot import (
+    CoTSolver,
+    GSM8KCoTSolver,
+    GSM8KSelfConsistencyCoTSolver,
+)
 from solvers.game24_tot import (
     Game24ToTSolver,
+)
+from solvers.gsm8k_tot import (
+    GSM8KToTBFSSolver,
 )
 
 
@@ -60,8 +86,18 @@ def parse_args() -> argparse.Namespace:
         description=(
             "Evaluate baseline, CoT and "
             "search-based ToT methods "
-            "on the Game of 24 dataset."
+            "on Game24 or GSM8K."
         )
+    )
+
+    parser.add_argument(
+        "--dataset",
+        choices=[
+            "game24",
+            "gsm8k",
+        ],
+        default="game24",
+        help="Dataset to evaluate.",
     )
 
     parser.add_argument(
@@ -69,6 +105,7 @@ def parse_args() -> argparse.Namespace:
         choices=[
             "baseline",
             "cot",
+            "self_consistency_cot",
             "tot_bfs",
             "tot_dfs",
             "tot_astar",
@@ -116,8 +153,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data-path",
         type=Path,
-        default=DEFAULT_DATA_PATH,
-        help="Path to the Game24 JSONL dataset.",
+        default=None,
+        help=(
+            "Path to the dataset file. "
+            "Defaults to the configured path "
+            "for the selected --dataset."
+        ),
     )
 
     parser.add_argument(
@@ -174,8 +215,36 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cot-max-tokens",
         type=int,
-        default=DEFAULT_COT_MAX_TOKENS,
+        default=None,
         help="Maximum generated tokens for CoT.",
+    )
+
+    parser.add_argument(
+        "--gsm8k-baseline-max-tokens",
+        type=int,
+        default=DEFAULT_GSM8K_BASELINE_MAX_TOKENS,
+        help="Maximum generated tokens for GSM8K baseline.",
+    )
+
+    parser.add_argument(
+        "--gsm8k-cot-max-tokens",
+        type=int,
+        default=DEFAULT_GSM8K_COT_MAX_TOKENS,
+        help="Maximum generated tokens for GSM8K CoT.",
+    )
+
+    parser.add_argument(
+        "--self-consistency-samples",
+        type=int,
+        default=DEFAULT_SELF_CONSISTENCY_SAMPLES,
+        help="Number of CoT samples used for self-consistency.",
+    )
+
+    parser.add_argument(
+        "--self-consistency-temperature",
+        type=float,
+        default=DEFAULT_SELF_CONSISTENCY_TEMPERATURE,
+        help="Sampling temperature for self-consistency CoT.",
     )
 
     parser.add_argument(
@@ -183,6 +252,43 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=DEFAULT_VALUE_MAX_TOKENS,
         help="Maximum generated tokens for ToT value scoring.",
+    )
+
+    parser.add_argument(
+        "--gsm8k-tot-branch-factor",
+        type=int,
+        default=DEFAULT_GSM8K_TOT_BRANCH_FACTOR,
+        help=(
+            "Number of next-step candidates generated "
+            "per GSM8K ToT state."
+        ),
+    )
+
+    parser.add_argument(
+        "--gsm8k-tot-max-depth",
+        type=int,
+        default=DEFAULT_GSM8K_TOT_MAX_DEPTH,
+        help="Maximum reasoning depth for GSM8K ToT-BFS.",
+    )
+
+    parser.add_argument(
+        "--gsm8k-tot-step-max-tokens",
+        type=int,
+        default=DEFAULT_GSM8K_TOT_STEP_MAX_TOKENS,
+        help=(
+            "Maximum generated tokens for GSM8K ToT "
+            "next-step generation."
+        ),
+    )
+
+    parser.add_argument(
+        "--gsm8k-tot-generation-temperature",
+        type=float,
+        default=DEFAULT_GSM8K_TOT_GENERATION_TEMPERATURE,
+        help=(
+            "Sampling temperature for GSM8K ToT "
+            "next-step generation."
+        ),
     )
 
     parser.add_argument(
@@ -295,23 +401,45 @@ def main() -> None:
 
     _validate_args(args)
 
+    data_path = _resolve_data_path(args)
+    cot_max_tokens = _resolve_cot_max_tokens(args)
+
     # 数据集只加载一次。
     #
     # 当 --method all 时，所有方法都会复用同一个 samples 列表，
     # 从而保证测试题目和顺序完全一致。
-    samples = load_game24_dataset(
-        args.data_path,
-        shuffle=not args.no_shuffle,
-        seed=args.seed,
-        limit=args.limit,
-        solvable_only=True,
-    )
-
-    if not samples:
-        raise RuntimeError(
+    if args.dataset == "game24":
+        samples = load_game24_dataset(
+            data_path,
+            shuffle=not args.no_shuffle,
+            seed=args.seed,
+            limit=args.limit,
+            solvable_only=True,
+        )
+        empty_message = (
             "No solvable samples were loaded "
             "from the dataset."
         )
+
+    elif args.dataset == "gsm8k":
+        samples = load_gsm8k_dataset(
+            data_path,
+            shuffle=not args.no_shuffle,
+            seed=args.seed,
+            limit=args.limit,
+        )
+        empty_message = (
+            "No GSM8K samples were loaded "
+            "from the dataset."
+        )
+
+    else:
+        raise ValueError(
+            f"Unsupported dataset: {args.dataset}"
+        )
+
+    if not samples:
+        raise RuntimeError(empty_message)
 
     # 所有方法共用同一个模型后端。
     #
@@ -320,21 +448,46 @@ def main() -> None:
         model_name=args.model,
         base_url=args.ollama_url,
         default_temperature=args.temperature,
-        default_max_tokens=args.cot_max_tokens,
+        default_max_tokens=cot_max_tokens,
         default_context_length=args.num_ctx,
         keep_alive=DEFAULT_KEEP_ALIVE,
         timeout=DEFAULT_REQUEST_TIMEOUT,
     )
 
     common_run_config = {
-        "data_path": str(args.data_path),
+        "dataset": args.dataset,
+        "data_path": str(data_path),
         "results_dir": str(args.results_dir),
         "shuffle": not args.no_shuffle,
         "temperature": args.temperature,
         "max_tokens": args.max_tokens,
         "num_ctx": args.num_ctx,
         "baseline_max_tokens": args.baseline_max_tokens,
-        "cot_max_tokens": args.cot_max_tokens,
+        "cot_max_tokens": cot_max_tokens,
+        "gsm8k_baseline_max_tokens": (
+            args.gsm8k_baseline_max_tokens
+        ),
+        "gsm8k_cot_max_tokens": (
+            args.gsm8k_cot_max_tokens
+        ),
+        "self_consistency_samples": (
+            args.self_consistency_samples
+        ),
+        "self_consistency_temperature": (
+            args.self_consistency_temperature
+        ),
+        "gsm8k_tot_branch_factor": (
+            args.gsm8k_tot_branch_factor
+        ),
+        "gsm8k_tot_max_depth": (
+            args.gsm8k_tot_max_depth
+        ),
+        "gsm8k_tot_step_max_tokens": (
+            args.gsm8k_tot_step_max_tokens
+        ),
+        "gsm8k_tot_generation_temperature": (
+            args.gsm8k_tot_generation_temperature
+        ),
         "value_max_tokens": args.value_max_tokens,
         "keep_alive": DEFAULT_KEEP_ALIVE,
         "ollama_url": args.ollama_url,
@@ -343,7 +496,8 @@ def main() -> None:
     }
 
     methods_to_run = _resolve_methods(
-        args.method
+        args.method,
+        dataset=args.dataset,
     )
 
     for run_index, method_name in enumerate(
@@ -355,43 +509,69 @@ def main() -> None:
             print()
 
         solver = _create_solver(
+            dataset=args.dataset,
             method_name=method_name,
             model=model,
             args=args,
+            cot_max_tokens=cot_max_tokens,
         )
 
         run_config = {
             **common_run_config,
             **_method_config(
+                args.dataset,
                 method_name,
                 args,
+                cot_max_tokens,
             ),
         }
 
         _print_run_header(
+            dataset=args.dataset,
             method_name=method_name,
             model_name=args.model,
             samples=samples,
             seed=args.seed,
         )
 
-        evaluate_game24(
-            samples=samples,
-            solver=solver,
-            model_name=args.model,
-            seed=args.seed,
-            results_dir=args.results_dir,
-            run_config=run_config,
-        )
+        if args.dataset == "game24":
+            evaluate_game24(
+                samples=samples,
+                solver=solver,
+                model_name=args.model,
+                seed=args.seed,
+                results_dir=args.results_dir,
+                run_config=run_config,
+            )
+
+        elif args.dataset == "gsm8k":
+            evaluate_gsm8k(
+                samples=samples,
+                solver=solver,
+                model_name=args.model,
+                seed=args.seed,
+                results_dir=args.results_dir,
+                run_config=run_config,
+            )
 
 
 def _resolve_methods(
     selected_method: str,
+    *,
+    dataset: str,
 ) -> list[str]:
     """
     将 --method 转换为实际运行的方法列表。
     """
     if selected_method == "all":
+        if dataset == "gsm8k":
+            return [
+                "baseline",
+                "cot",
+                "self_consistency_cot",
+                "tot_bfs",
+            ]
+
         return [
             "baseline",
             "cot",
@@ -404,15 +584,98 @@ def _resolve_methods(
     return [selected_method]
 
 
+def _resolve_data_path(
+    args: argparse.Namespace,
+) -> Path:
+    if args.data_path is not None:
+        return args.data_path
+
+    if args.dataset == "gsm8k":
+        return DEFAULT_GSM8K_DATA_PATH
+
+    return DEFAULT_DATA_PATH
+
+
+def _resolve_cot_max_tokens(
+    args: argparse.Namespace,
+) -> int:
+    if args.cot_max_tokens is not None:
+        return args.cot_max_tokens
+
+    if args.dataset == "gsm8k":
+        return args.gsm8k_cot_max_tokens
+
+    return DEFAULT_COT_MAX_TOKENS
+
+
 def _create_solver(
     *,
+    dataset: str,
     method_name: str,
     model: OllamaModel,
     args: argparse.Namespace,
+    cot_max_tokens: int,
 ) -> BaseSolver:
     """
     根据方法名创建 solver。
     """
+    if dataset == "gsm8k":
+        if method_name == "baseline":
+            return GSM8KBaselineSolver(
+                model,
+                temperature=args.temperature,
+                max_tokens=(
+                    args.gsm8k_baseline_max_tokens
+                ),
+            )
+
+        if method_name == "cot":
+            return GSM8KCoTSolver(
+                model,
+                temperature=args.temperature,
+                max_tokens=cot_max_tokens,
+            )
+
+        if method_name == "self_consistency_cot":
+            return GSM8KSelfConsistencyCoTSolver(
+                model,
+                temperature=(
+                    args.self_consistency_temperature
+                ),
+                max_tokens=cot_max_tokens,
+                samples=(
+                    args.self_consistency_samples
+                ),
+            )
+
+        if method_name == "tot_bfs":
+            return GSM8KToTBFSSolver(
+                model,
+                generation_temperature=(
+                    args.gsm8k_tot_generation_temperature
+                ),
+                value_temperature=0.0,
+                step_max_tokens=(
+                    args.gsm8k_tot_step_max_tokens
+                ),
+                value_max_tokens=args.value_max_tokens,
+                branch_factor=(
+                    args.gsm8k_tot_branch_factor
+                ),
+                beam_width=args.beam_width,
+                max_depth=args.gsm8k_tot_max_depth,
+                value_batch_size=(
+                    args.value_batch_size
+                ),
+                max_expanded_nodes=(
+                    args.max_expanded_nodes
+                ),
+            )
+
+        raise ValueError(
+            f"Unsupported GSM8K method: {method_name}"
+        )
+
     if method_name == "baseline":
         return BaselineSolver(
             model,
@@ -427,7 +690,7 @@ def _create_solver(
         return CoTSolver(
             model,
             temperature=args.temperature,
-            max_tokens=args.cot_max_tokens,
+            max_tokens=cot_max_tokens,
         )
 
     if method_name in TOT_METHODS:
@@ -465,12 +728,80 @@ def _create_solver(
 
 
 def _method_config(
+    dataset: str,
     method_name: str,
     args: argparse.Namespace,
+    cot_max_tokens: int,
 ) -> dict[str, Any]:
     """
     生成需要保存到结果 JSON 中的方法参数。
     """
+    if dataset == "gsm8k":
+        if method_name == "baseline":
+            return {
+                "method": "baseline",
+                "dataset": "gsm8k",
+                "shots": 3,
+                "reasoning": False,
+                "max_tokens": (
+                    args.gsm8k_baseline_max_tokens
+                ),
+            }
+
+        if method_name == "cot":
+            return {
+                "method": "cot",
+                "dataset": "gsm8k",
+                "shots": 3,
+                "reasoning": True,
+                "max_tokens": cot_max_tokens,
+            }
+
+        if method_name == "self_consistency_cot":
+            return {
+                "method": "self_consistency_cot",
+                "dataset": "gsm8k",
+                "shots": 3,
+                "reasoning": True,
+                "samples": (
+                    args.self_consistency_samples
+                ),
+                "temperature": (
+                    args.self_consistency_temperature
+                ),
+                "max_tokens": cot_max_tokens,
+            }
+
+        if method_name == "tot_bfs":
+            return {
+                "method": "tot_bfs",
+                "dataset": "gsm8k",
+                "strategy": "bfs",
+                "branch_factor": (
+                    args.gsm8k_tot_branch_factor
+                ),
+                "beam_width": args.beam_width,
+                "max_depth": args.gsm8k_tot_max_depth,
+                "step_max_tokens": (
+                    args.gsm8k_tot_step_max_tokens
+                ),
+                "generation_temperature": (
+                    args.gsm8k_tot_generation_temperature
+                ),
+                "value_max_tokens": args.value_max_tokens,
+                "value_batch_size": (
+                    args.value_batch_size
+                ),
+                "max_expanded_nodes": (
+                    args.max_expanded_nodes
+                ),
+            }
+
+        return {
+            "method": method_name,
+            "dataset": "gsm8k",
+        }
+
     if method_name == "baseline":
         return {
             "method": "baseline",
@@ -483,6 +814,7 @@ def _method_config(
             "method": "cot",
             "shots": 5,
             "reasoning": True,
+            "max_tokens": cot_max_tokens,
         }
 
     if method_name == "tot_bfs":
@@ -553,15 +885,17 @@ def _method_config(
 
 def _print_run_header(
     *,
+    dataset: str,
     method_name: str,
     model_name: str,
-    samples: list[Game24Sample],
+    samples: list[Game24Sample] | list[GSM8KSample],
     seed: int,
 ) -> None:
     """
     打印一次实验的基本信息。
     """
     print("=" * 72)
+    print(f"Dataset: {dataset}")
     print(f"Running method: {method_name}")
     print(f"Model: {model_name}")
     print(f"Samples: {len(samples)}")
@@ -595,14 +929,59 @@ def _validate_args(
             "--baseline-max-tokens must be positive"
         )
 
-    if args.cot_max_tokens <= 0:
+    if (
+        args.cot_max_tokens is not None
+        and args.cot_max_tokens <= 0
+    ):
         raise ValueError(
             "--cot-max-tokens must be positive"
+        )
+
+    if args.gsm8k_baseline_max_tokens <= 0:
+        raise ValueError(
+            "--gsm8k-baseline-max-tokens must be positive"
+        )
+
+    if args.gsm8k_cot_max_tokens <= 0:
+        raise ValueError(
+            "--gsm8k-cot-max-tokens must be positive"
+        )
+
+    if args.self_consistency_samples <= 0:
+        raise ValueError(
+            "--self-consistency-samples must be positive"
+        )
+
+    if args.self_consistency_temperature < 0:
+        raise ValueError(
+            "--self-consistency-temperature "
+            "must be non-negative"
         )
 
     if args.value_max_tokens <= 0:
         raise ValueError(
             "--value-max-tokens must be positive"
+        )
+
+    if args.gsm8k_tot_branch_factor <= 0:
+        raise ValueError(
+            "--gsm8k-tot-branch-factor must be positive"
+        )
+
+    if args.gsm8k_tot_max_depth <= 0:
+        raise ValueError(
+            "--gsm8k-tot-max-depth must be positive"
+        )
+
+    if args.gsm8k_tot_step_max_tokens <= 0:
+        raise ValueError(
+            "--gsm8k-tot-step-max-tokens must be positive"
+        )
+
+    if args.gsm8k_tot_generation_temperature < 0:
+        raise ValueError(
+            "--gsm8k-tot-generation-temperature "
+            "must be non-negative"
         )
 
     if args.temperature < 0:

@@ -464,36 +464,42 @@ def main() -> None:
         "num_ctx": args.num_ctx,
         "baseline_max_tokens": args.baseline_max_tokens,
         "cot_max_tokens": cot_max_tokens,
-        "gsm8k_baseline_max_tokens": (
-            args.gsm8k_baseline_max_tokens
-        ),
-        "gsm8k_cot_max_tokens": (
-            args.gsm8k_cot_max_tokens
-        ),
-        "self_consistency_samples": (
-            args.self_consistency_samples
-        ),
-        "self_consistency_temperature": (
-            args.self_consistency_temperature
-        ),
-        "gsm8k_tot_branch_factor": (
-            args.gsm8k_tot_branch_factor
-        ),
-        "gsm8k_tot_max_depth": (
-            args.gsm8k_tot_max_depth
-        ),
-        "gsm8k_tot_step_max_tokens": (
-            args.gsm8k_tot_step_max_tokens
-        ),
-        "gsm8k_tot_generation_temperature": (
-            args.gsm8k_tot_generation_temperature
-        ),
         "value_max_tokens": args.value_max_tokens,
         "keep_alive": DEFAULT_KEEP_ALIVE,
         "ollama_url": args.ollama_url,
         "limit": args.limit,
         "seed": args.seed,
     }
+
+    if args.dataset == "gsm8k":
+        common_run_config.update(
+            {
+                "gsm8k_baseline_max_tokens": (
+                    args.gsm8k_baseline_max_tokens
+                ),
+                "gsm8k_cot_max_tokens": (
+                    args.gsm8k_cot_max_tokens
+                ),
+                "self_consistency_samples": (
+                    args.self_consistency_samples
+                ),
+                "self_consistency_temperature": (
+                    args.self_consistency_temperature
+                ),
+                "gsm8k_tot_branch_factor": (
+                    args.gsm8k_tot_branch_factor
+                ),
+                "gsm8k_tot_max_depth": (
+                    args.gsm8k_tot_max_depth
+                ),
+                "gsm8k_tot_step_max_tokens": (
+                    args.gsm8k_tot_step_max_tokens
+                ),
+                "gsm8k_tot_generation_temperature": (
+                    args.gsm8k_tot_generation_temperature
+                ),
+            }
+        )
 
     methods_to_run = _resolve_methods(
         args.method,

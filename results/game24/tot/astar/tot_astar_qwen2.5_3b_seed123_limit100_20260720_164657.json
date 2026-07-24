@@ -20,6 +20,7 @@
     "average_generated_nodes": 556.45
   },
   "config": {
+    "dataset": "game24",
     "data_path": "D:\\files\\NJU\\ToT\\Tot_mcts\\data\\game24.jsonl",
     "results_dir": "D:\\files\\NJU\\ToT\\Tot_mcts\\results",
     "shuffle": true,

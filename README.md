@@ -27,7 +27,7 @@ The project compares direct input-output prompting, Chain-of-Thought prompting, 
 .
 ├── config.py                  Default paths and experiment parameters
 ├── main.py                    CLI entry point
-├── data/                      Local Game24 and GSM8K data files
+├── data/                      Game24 and GSM8K data files
 ├── datasets/                  Dataset loaders and validation
 ├── evaluation/                Game24/GSM8K evaluators and result saving
 ├── models/                    Model backend interface and Ollama backend
@@ -97,11 +97,7 @@ The GSM8K loader excludes the first five records from evaluation because those r
 
 ## Quick Start
 
-Run commands from the repository root:
-
-```powershell
-cd D:\files\NJU\ToT\Tot_mcts
-```
+Run commands from the repository root.
 
 Game24:
 
@@ -184,6 +180,10 @@ GSM8K ToT:
                                   next-step generation temperature
 ```
 
+Run experiments with the CLI option names shown above. For GSM8K ToT-BFS,
+the result JSON records both the `--gsm8k-tot-*` settings and the
+method-level ToT settings used by the solver.
+
 ## Algorithm Notes
 
 - `tot_bfs` is beam BFS, not exhaustive BFS.
@@ -216,8 +216,8 @@ The saved result files are included in this repository so the reported runs can 
 Typical GSM8K ToT-BFS sweep:
 
 ```powershell
-python main.py --dataset gsm8k --method tot_bfs --limit 100 --beam-width 3 --gsm8k-tot-branch-factor 3 --gsm8k-tot-max-depth 6 --max-expanded-nodes 100 --value-max-tokens 256
-python main.py --dataset gsm8k --method tot_bfs --limit 100 --beam-width 5 --gsm8k-tot-branch-factor 5 --gsm8k-tot-max-depth 8 --max-expanded-nodes 200 --value-max-tokens 256
+python main.py --dataset gsm8k --method tot_bfs --limit 100 --beam-width 3 --gsm8k-tot-branch-factor 3 --gsm8k-tot-max-depth 6 --gsm8k-tot-step-max-tokens 512 --gsm8k-tot-generation-temperature 0.7 --value-max-tokens 256 --value-batch-size 3 --max-expanded-nodes 100
+python main.py --dataset gsm8k --method tot_bfs --limit 100 --beam-width 5 --gsm8k-tot-branch-factor 5 --gsm8k-tot-max-depth 8 --gsm8k-tot-step-max-tokens 512 --gsm8k-tot-generation-temperature 0.7 --value-max-tokens 256 --value-batch-size 3 --max-expanded-nodes 200
 ```
 
 ## Verification

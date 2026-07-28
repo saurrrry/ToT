@@ -1,3 +1,5 @@
+"""Beam BFS search for Game24 ToT."""
+
 from __future__ import annotations
 
 from solvers.game24_tot.generator import (
@@ -17,21 +19,7 @@ def bfs_search(
     beam_width: int = 10,
     max_expanded_nodes: int = 1000,
 ) -> SearchResult:
-    """
-    基于层次扩展的 Beam BFS。
-
-    每一层流程：
-
-        当前 frontier
-            ↓
-        程序生成所有子节点
-            ↓
-        检查是否已经得到 24
-            ↓
-        模型批量评价
-            ↓
-        保留 top-k
-    """
+    """Run level-order beam search guided by model state scores."""
     if initial_state.is_goal():
         return SearchResult(
             solution=initial_state,
@@ -65,8 +53,7 @@ def bfs_search(
             generated_nodes += len(children)
 
             for child in children:
-                # 最终目标优先直接返回，
-                # 不需要再让模型评价。
+                # Exact goals do not need model scoring.
                 if child.is_goal():
                     trace.append(
                         {

@@ -1,3 +1,5 @@
+"""Parsing helpers for model answers and state scores."""
+
 from __future__ import annotations
 
 import json
@@ -6,21 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
-# ============================================================
-# Baseline / CoT 最终表达式解析
-# ============================================================
-
-
-# 匹配完整 Answer 行。
-#
-# 支持：
-#     Answer: (4 + 8) * (6 - 4) = 24
-#
-# 也支持：
-#     answer: ...
-#
-# [^\r\n]+? 表示只读取当前行，
-# 防止把 CoT 中前面的 Steps 一起提取进去。
+# Match the final answer line without swallowing earlier CoT steps.
 ANSWER_PATTERN = re.compile(
     r"Answer\s*:\s*"
     r"(?P<expression>[^\r\n]+?)"
@@ -29,14 +17,7 @@ ANSWER_PATTERN = re.compile(
 )
 
 
-# 当模型没有输出 Answer: 标签，
-# 但输出了：
-#
-#     (4 + 8) * (6 - 4) = 24
-#
-# 时使用这个模式。
-#
-# ^ 和 re.MULTILINE 保证从某一行开头匹配。
+# Fallback for models that only emit a final expression line.
 FINAL_LINE_PATTERN = re.compile(
     r"^\s*"
     r"(?P<expression>[0-9+\-*/().\s]+?)"
@@ -51,33 +32,10 @@ FINAL_LINE_PATTERN = re.compile(
 def extract_final_expression(
     response: str,
 ) -> str | None:
-    """
-    从 Baseline 或 CoT 模型输出中提取最终算术表达式。
-
-    支持：
-
-        Answer: (4 + 8) * (6 - 4) = 24
-
-    也支持：
-
-        (4 + 8) * (6 - 4) = 24
-
-    还支持模型只输出：
-
-        (4 + 8) * (6 - 4)
-
-    返回：
-
-        "(4 + 8) * (6 - 4)"
-
-    无法可靠提取时返回 None。
-    """
+    """Extract the final Game24 expression from baseline or CoT output."""
     normalized = _normalize_symbols(response)
 
-    # 优先寻找带 Answer: 的结果。
-    #
-    # CoT 输出中可能有多个等号，
-    # 但最终答案一般在最后，因此取最后一个匹配项。
+    # CoT can contain many equations; the final answer should be last.
     answer_matches = list(
         ANSWER_PATTERN.finditer(normalized)
     )
@@ -99,9 +57,6 @@ def extract_final_expression(
 
         return None
 
-    # 如果不存在 Answer:，寻找最后一行：
-    #
-    #     expression = 24
     final_line_matches = list(
         FINAL_LINE_PATTERN.finditer(
             normalized
@@ -125,15 +80,7 @@ def extract_final_expression(
 
         return None
 
-    # 最后兜底：
-    #
-    # Baseline prompt 本身以 Answer: 结束，
-    # 因此模型可能只补全文本：
-    #
-    #     (4 + 8) * (6 - 4)
-    #
-    # 只有整个输出都是纯算术式时才接受，
-    # 防止把多行 CoT 步骤误认为最终表达式。
+    # Accept bare expressions only when the entire output is arithmetic.
     stripped = normalized.strip()
 
     if _looks_like_pure_expression(
@@ -149,15 +96,7 @@ def extract_final_expression(
 def _normalize_symbols(
     text: str,
 ) -> str:
-    """
-    把模型可能输出的 Unicode 运算符转换为 verifier 支持的符号。
-
-    例如：
-
-        × -> *
-        ÷ -> /
-        − -> -
-    """
+    """Normalize Unicode math symbols to verifier-supported operators."""
     return (
         text
         .replace("×", "*")
@@ -173,12 +112,10 @@ def _normalize_symbols(
 def _clean_expression(
     expression: str,
 ) -> str:
-    """
-    清理表达式前后的标签和多余空格。
-    """
+    """Remove answer labels, trailing target text, and extra whitespace."""
     expression = expression.strip()
 
-    # 某些模型可能重复输出 Answer:。
+    # Some models repeat the prompt suffix before the actual expression.
     expression = re.sub(
         r"^\s*Answer\s*:\s*",
         "",
@@ -186,7 +123,6 @@ def _clean_expression(
         flags=re.IGNORECASE,
     )
 
-    # 如果末尾仍然带有 = 24，则删除。
     expression = re.sub(
         r"\s*=\s*24\s*$",
         "",
@@ -200,36 +136,15 @@ def _clean_expression(
 def _looks_like_pure_expression(
     text: str,
 ) -> bool:
-    """
-    检查字符串是否只包含算术表达式允许的字符。
-
-    这里只负责格式过滤，不负责判断：
-
-        1. 是否使用了正确数字；
-        2. 是否每个数字只使用一次；
-        3. 结果是否等于 24；
-        4. AST 是否合法。
-
-    这些由 verifier 完成。
-    """
+    """Check whether text is shaped like a single arithmetic expression."""
     if not text:
         return False
 
-    # 不允许多行，避免把 CoT 步骤误识别成一个表达式。
+    # Multi-line text is likely reasoning, not a final expression.
     if "\n" in text or "\r" in text:
         return False
 
-    # 允许：
-    #
-    #     数字
-    #     + - * /
-    #     括号
-    #     小数点
-    #     空格
-    #
-    # 即使正则允许小数点，
-    # 你当前的 verifier 只允许 int literal，
-    # 因此 4.0 最后仍会验证失败。
+    # This is only a syntax filter; semantic checks stay in the verifier.
     return (
         re.fullmatch(
             r"[0-9+\-*/().\s]+",
@@ -237,11 +152,6 @@ def _looks_like_pure_expression(
         )
         is not None
     )
-
-
-# ============================================================
-# ToT 状态评价 JSON 解析
-# ============================================================
 
 
 VALID_STATE_RATINGS = {
@@ -381,42 +291,7 @@ def parse_state_ratings(
     response: str,
     expected_count: int,
 ) -> list[str]:
-    """
-    解析 Qwen 对一批中间状态返回的评价。
-
-    期望格式：
-
-        {
-          "ratings": [
-            {
-              "id": 1,
-              "rating": "likely"
-            },
-            {
-              "id": 2,
-              "rating": "impossible"
-            }
-          ]
-        }
-
-    返回值顺序与状态 ID 顺序一致，例如：
-
-        ["likely", "impossible"]
-
-    容错策略：
-
-        1. JSON 整体解析失败：
-           所有状态返回 "maybe"。
-
-        2. 缺少某个 ID：
-           对应状态返回 "maybe"。
-
-        3. rating 不在允许集合中：
-           对应状态返回 "maybe"。
-
-        4. 模型错误输出 Markdown JSON code block：
-           自动删除 ```json 和 ```。
-    """
+    """Parse legacy state ratings, defaulting invalid items to "maybe"."""
     return _parse_state_ratings_result(
         response,
         expected_count,
@@ -480,7 +355,7 @@ def _parse_state_ratings_result(
         state_id = item.get("id")
         rating = item.get("rating")
 
-        # bool 是 int 的子类，因此要显式排除。
+        # bool is an int subclass, so exclude it explicitly.
         if (
             not isinstance(state_id, int)
             or isinstance(state_id, bool)
@@ -502,7 +377,7 @@ def _parse_state_ratings_result(
         ):
             continue
 
-        # 只接收当前批次范围内的 ID。
+        # Ignore IDs outside the current batch.
         if not (
             1
             <= state_id
@@ -510,8 +385,7 @@ def _parse_state_ratings_result(
         ):
             continue
 
-        # 如果同一个 ID 重复出现，
-        # 后出现的结果覆盖前面的结果。
+        # Later duplicates overwrite earlier ones.
         parsed_by_id[state_id] = (
             normalized_rating
         )
@@ -539,19 +413,7 @@ def _parse_state_ratings_result(
 def _remove_code_fence(
     text: str,
 ) -> str:
-    """
-    删除模型可能附加的 Markdown code block。
-
-    例如：
-
-        ```json
-        {"ratings": [...]}
-        ```
-
-    会变成：
-
-        {"ratings": [...]}
-    """
+    """Strip a surrounding Markdown JSON fence if the model adds one."""
     text = re.sub(
         r"^\s*```(?:json)?\s*",
         "",
@@ -571,14 +433,7 @@ def _remove_code_fence(
 def _parse_json_object(
     text: str,
 ) -> dict[str, Any] | None:
-    """
-    尝试解析 JSON 对象。
-
-    首先直接 json.loads。
-
-    如果模型在 JSON 前后添加少量文本，
-    再尝试截取第一个 { 到最后一个 }。
-    """
+    """Parse a JSON object, allowing small text before or after it."""
     try:
         data = json.loads(text)
 
@@ -614,12 +469,7 @@ def _parse_json_object(
 def _default_ratings(
     count: int,
 ) -> list[str]:
-    """
-    模型评价无法解析时使用中性评价。
-
-    选择 maybe 而不是 impossible，
-    避免一次格式错误直接剪掉可能正确的搜索路径。
-    """
+    """Use neutral ratings when the model output cannot be trusted."""
     return [
         "maybe"
         for _ in range(count)

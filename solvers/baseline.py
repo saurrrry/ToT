@@ -1,3 +1,5 @@
+"""Direct-answer baseline solvers."""
+
 from __future__ import annotations
 
 from datasets.game24 import Game24Sample
@@ -32,12 +34,10 @@ class BaselineSolver(BaseSolver):
         *,
         seed: int | None = None,
     ) -> SolverResult:
-        # 根据当前题目的四个数字创建 prompt。
         prompt = build_baseline_prompt(
             sample.input_text
         )
 
-        # 调用模型。
         generation = self.model.generate(
             prompt,
             temperature=self.temperature,
@@ -45,7 +45,6 @@ class BaselineSolver(BaseSolver):
             seed=seed,
         )
 
-        # 从模型返回文本中提取最终算术表达式。
         expression = extract_final_expression(
             generation.text
         )

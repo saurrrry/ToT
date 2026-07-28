@@ -1,3 +1,5 @@
+"""GSM8K Tree-of-Thoughts BFS solver orchestration."""
+
 from __future__ import annotations
 
 import json
@@ -41,6 +43,7 @@ class GSM8KStateValueEvaluator:
         self,
         states: list[GSM8KState],
     ) -> list[float]:
+        """Return one cached or newly generated score per state."""
         unique_uncached = []
         pending = set()
 
@@ -73,6 +76,7 @@ class GSM8KStateValueEvaluator:
         self,
         states: list[GSM8KState],
     ) -> None:
+        """Score one batch of uncached states."""
         if not states:
             return
 
@@ -170,6 +174,7 @@ class GSM8KToTBFSSolver(BaseSolver):
         *,
         seed: int | None = None,
     ) -> SolverResult:
+        """Solve one GSM8K sample with step generation and beam search."""
         selected_seed = 42 if seed is None else seed
 
         initial_state = GSM8KState.initial(

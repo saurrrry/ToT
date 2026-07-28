@@ -1,3 +1,5 @@
+"""Weighted A*-style search for Game24 ToT."""
+
 from __future__ import annotations
 
 import heapq
@@ -26,20 +28,8 @@ def astar_search(
     The model-derived heuristic is not guaranteed to be admissible,
     so this implementation does not guarantee classical A* optimality.
 
-    优先级：
-
-        f(n) = g(n) + weight * (1 - score)
-
-    其中：
-
-        g(n):
-            当前搜索深度。
-
-        score:
-            Qwen 对状态的评价，范围 0 到 1。
-
-        1 - score:
-            越有希望的状态，启发式代价越低。
+    Priority is `depth + weight * (1 - score)`, so stronger model
+    scores reduce the estimated remaining cost.
     """
     if initial_state.is_goal():
         return SearchResult(
@@ -48,11 +38,7 @@ def astar_search(
 
     tie_breaker = count()
 
-    # heap 中保存：
-    #
-    #     priority
-    #     insertion_order
-    #     state
+    # Include insertion order so equal-priority states remain comparable.
     open_heap: list[
         tuple[
             float,
@@ -70,7 +56,7 @@ def astar_search(
         ),
     )
 
-    # 保存每个状态目前已知的最小 g 值。
+    # Best known depth for each deduplicated state.
     best_cost: dict[
         tuple[tuple[int, int], ...],
         int,

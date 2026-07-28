@@ -1,3 +1,5 @@
+"""Model-based next-step generation for GSM8K ToT."""
+
 from __future__ import annotations
 
 import json
@@ -38,6 +40,7 @@ class GSM8KStepGenerator:
         self,
         state: GSM8KState,
     ) -> list[GSM8KState]:
+        """Generate unique next-step child states."""
         if state.is_terminal():
             return []
 
@@ -106,6 +109,7 @@ def _parse_generated_steps(
     *,
     limit: int,
 ) -> list[str]:
+    """Parse model-generated steps from JSON, with line fallback."""
     data = _parse_json_object(text)
 
     if isinstance(data, dict):
@@ -139,6 +143,7 @@ def _parse_generated_steps(
 def _parse_json_object(
     text: str,
 ) -> dict | None:
+    """Parse a JSON object from raw model text."""
     cleaned = text.strip()
     cleaned = re.sub(
         r"^\s*```(?:json)?\s*",

@@ -1,3 +1,5 @@
+"""Evaluation loop for GSM8K solvers."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -19,6 +21,7 @@ def evaluate_gsm8k(
     results_dir: str | Path,
     run_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Evaluate one solver on GSM8K samples and save result JSON."""
     sample_results: list[dict[str, Any]] = []
 
     correct_count = 0
@@ -297,6 +300,7 @@ def evaluate_gsm8k(
 def _safe_int(
     value: Any,
 ) -> int:
+    """Convert optional metadata counters to integers."""
     if isinstance(value, bool):
         return 0
 

@@ -1,3 +1,5 @@
+"""Ollama model backend."""
+
 from __future__ import annotations
 
 import time
@@ -22,7 +24,7 @@ class OllamaModel(BaseModel):
         keep_alive: str = "30m",
         timeout: int = 300,
     ) -> None:
-        # 去掉地址最后的斜杠，避免拼接后出现双斜杠。
+        # Normalize the base URL before appending API paths.
         self.base_url = base_url.rstrip("/")
 
         self.model_name = model_name
@@ -41,7 +43,6 @@ class OllamaModel(BaseModel):
         seed: int | None = None,
         context_length: int | None = None,
     ) -> GenerationResult:
-        # 如果调用者没有单独提供参数，就使用模型实例的默认参数。
         selected_temperature = (
             self.default_temperature
             if temperature is None
@@ -63,7 +64,7 @@ class OllamaModel(BaseModel):
         options: dict[str, Any] = {
             "temperature": selected_temperature,
 
-            # Ollama 中 num_predict 表示最多生成多少 token。
+            # Ollama uses num_predict for the generation limit.
             "num_predict": selected_max_tokens,
             "num_ctx": selected_context_length,
         }
@@ -75,7 +76,7 @@ class OllamaModel(BaseModel):
             "model": self.model_name,
             "prompt": prompt,
 
-            # 关闭流式响应，让 requests 一次拿到完整 JSON。
+            # Keep response handling simple and deterministic.
             "stream": False,
 
             "keep_alive": self.keep_alive,
@@ -140,7 +141,6 @@ class OllamaModel(BaseModel):
                 "'response' field."
             )
 
-        # Ollama 的 duration 字段以纳秒为单位。
         ollama_duration = data.get("total_duration")
 
         if isinstance(ollama_duration, int):

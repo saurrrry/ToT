@@ -1,3 +1,5 @@
+"""Game24 dataset loading and validation."""
+
 from __future__ import annotations
 
 import json
@@ -11,19 +13,14 @@ from typing import Any
 class Game24Sample:
     """A single Game of 24 dataset sample."""
 
-    # 数据集中的唯一标识符
     id: str
 
-    # 四个输入数字
     numbers: tuple[int, int, int, int]
 
-    # 数据集中给出的参考解
     solutions: tuple[str, ...]
 
-    # 该题是否存在解
     solvable: bool
 
-    # 保存原始数据，方便以后分析 amt、solved_rate 等字段
     metadata: dict[str, Any]
 
     @property
@@ -74,7 +71,7 @@ def load_game24_dataset(
         encoding="utf-8",
     ) as file:
         for line_number, line in enumerate(file, start=1):
-            # 忽略空行。
+            # Skip blank lines in JSONL files.
             line = line.strip()
             if not line:
                 continue
@@ -94,9 +91,7 @@ def load_game24_dataset(
             samples.append(sample)
 
     if shuffle:
-        # 不调用全局 random.seed()。
-        #
-        # 单独创建一个 Random 对象，可以避免影响程序其他模块中的随机数。
+        # Use a local RNG so loading data does not affect other modules.
         random_generator = random.Random(seed)
         random_generator.shuffle(samples)
 
@@ -162,7 +157,7 @@ def _parse_sample(
             f"got {raw_solvable!r}"
         )
 
-    # 除去主要字段后，其他字段都作为 metadata 保存。
+    # Preserve dataset-specific fields for later analysis.
     metadata = {
         key: value
         for key, value in item.items()

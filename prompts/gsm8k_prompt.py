@@ -1,3 +1,5 @@
+"""Prompt builders for GSM8K experiments."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -88,6 +90,7 @@ Solution:"""
 def build_gsm8k_baseline_prompt(
     question: str,
 ) -> str:
+    """Insert one question into the GSM8K direct-answer prompt."""
     return GSM8K_BASELINE_PROMPT.format(
         question=question,
     )
@@ -96,6 +99,7 @@ def build_gsm8k_baseline_prompt(
 def build_gsm8k_cot_prompt(
     question: str,
 ) -> str:
+    """Insert one question into the GSM8K CoT prompt."""
     return GSM8K_COT_PROMPT.format(
         question=question,
     )
@@ -107,6 +111,7 @@ def build_gsm8k_step_generation_prompt(
     steps: list[str],
     branch_factor: int,
 ) -> str:
+    """Build a prompt that asks for independent next-step candidates."""
     if branch_factor <= 0:
         raise ValueError(
             "branch_factor must be greater than 0"
@@ -161,15 +166,13 @@ JSON:"""
 def build_gsm8k_value_prompt(
     states: list[GSM8KState],
 ) -> str:
+    """Build a value prompt for partial GSM8K reasoning states."""
     if not states:
         raise ValueError(
             "states must contain at least one state"
         )
 
-    # 根据实际状态数量动态生成示例。
-    #
-    # 例如有 3 个状态：
-    # {"scores":[0.35,0.35,0.35]}
+    # Match the required JSON example to the batch size.
     score_examples = ",".join(
         "0.35"
         for _ in states

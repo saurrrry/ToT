@@ -1,3 +1,5 @@
+"""Command-line entry point for local ToT experiments."""
+
 from __future__ import annotations
 
 import argparse
@@ -69,7 +71,7 @@ from solvers.gsm8k_tot import (
 )
 
 
-# 命令行中的 ToT 方法名与内部 strategy 的映射。
+# CLI method names mapped to internal search strategies.
 TOT_METHODS = {
     "tot_bfs": "bfs",
     "tot_dfs": "dfs",
@@ -79,9 +81,7 @@ TOT_METHODS = {
 
 
 def parse_args() -> argparse.Namespace:
-    """
-    解析命令行参数。
-    """
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description=(
             "Evaluate baseline, CoT and "
@@ -300,10 +300,6 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
-    # ========================================================
-    # ToT-BFS 参数
-    # ========================================================
-
     parser.add_argument(
         "--beam-width",
         type=int,
@@ -313,10 +309,6 @@ def parse_args() -> argparse.Namespace:
             "BFS depth."
         ),
     )
-
-    # ========================================================
-    # ToT-DFS 参数
-    # ========================================================
 
     parser.add_argument(
         "--dfs-branch-limit",
@@ -329,10 +321,6 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
-    # ========================================================
-    # ToT-A* 参数
-    # ========================================================
-
     parser.add_argument(
         "--astar-weight",
         type=float,
@@ -342,10 +330,6 @@ def parse_args() -> argparse.Namespace:
             "used by A*."
         ),
     )
-
-    # ========================================================
-    # ToT-MCTS 参数
-    # ========================================================
 
     parser.add_argument(
         "--mcts-iterations",
@@ -365,10 +349,6 @@ def parse_args() -> argparse.Namespace:
             "UCT exploration constant used by MCTS."
         ),
     )
-
-    # ========================================================
-    # 所有搜索方法共用参数
-    # ========================================================
 
     parser.add_argument(
         "--value-batch-size",
@@ -394,9 +374,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """
-    程序主入口。
-    """
+    """Run one or more evaluation methods from the CLI."""
     args = parse_args()
 
     _validate_args(args)
@@ -404,10 +382,7 @@ def main() -> None:
     data_path = _resolve_data_path(args)
     cot_max_tokens = _resolve_cot_max_tokens(args)
 
-    # 数据集只加载一次。
-    #
-    # 当 --method all 时，所有方法都会复用同一个 samples 列表，
-    # 从而保证测试题目和顺序完全一致。
+    # Load samples once so --method all uses identical examples and order.
     if args.dataset == "game24":
         samples = load_game24_dataset(
             data_path,
@@ -441,9 +416,7 @@ def main() -> None:
     if not samples:
         raise RuntimeError(empty_message)
 
-    # 所有方法共用同一个模型后端。
-    #
-    # solver 会在每次调用 generate() 时传入自己的参数。
+    # Share one backend while each solver controls per-call generation args.
     model = OllamaModel(
         model_name=args.model,
         base_url=args.ollama_url,
@@ -510,7 +483,6 @@ def main() -> None:
         methods_to_run,
         start=1,
     ):
-        # 多个方法之间打印空行。
         if run_index > 1:
             print()
 
@@ -566,9 +538,7 @@ def _resolve_methods(
     *,
     dataset: str,
 ) -> list[str]:
-    """
-    将 --method 转换为实际运行的方法列表。
-    """
+    """Resolve --method into concrete methods to evaluate."""
     if selected_method == "all":
         if dataset == "gsm8k":
             return [
@@ -622,9 +592,7 @@ def _create_solver(
     args: argparse.Namespace,
     cot_max_tokens: int,
 ) -> BaseSolver:
-    """
-    根据方法名创建 solver。
-    """
+    """Create the solver selected by dataset and method."""
     if dataset == "gsm8k":
         if method_name == "baseline":
             return GSM8KBaselineSolver(
@@ -687,8 +655,6 @@ def _create_solver(
             model,
             temperature=args.temperature,
 
-            # Baseline 只输出一行表达式，
-            # 不需要与 CoT 相同的长输出。
             max_tokens=args.baseline_max_tokens,
         )
 
@@ -739,9 +705,7 @@ def _method_config(
     args: argparse.Namespace,
     cot_max_tokens: int,
 ) -> dict[str, Any]:
-    """
-    生成需要保存到结果 JSON 中的方法参数。
-    """
+    """Build method-specific config saved to result JSON."""
     if dataset == "gsm8k":
         if method_name == "baseline":
             return {
@@ -897,9 +861,7 @@ def _print_run_header(
     samples: list[Game24Sample] | list[GSM8KSample],
     seed: int,
 ) -> None:
-    """
-    打印一次实验的基本信息。
-    """
+    """Print a compact header for one evaluation run."""
     print("=" * 72)
     print(f"Dataset: {dataset}")
     print(f"Running method: {method_name}")
@@ -912,9 +874,7 @@ def _print_run_header(
 def _validate_args(
     args: argparse.Namespace,
 ) -> None:
-    """
-    在开始加载模型和数据之前检查命令行参数。
-    """
+    """Validate CLI arguments before loading data or models."""
     if args.limit < 0:
         raise ValueError(
             "--limit must be non-negative"

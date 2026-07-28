@@ -1,3 +1,5 @@
+"""Prompt builders for Game24 experiments."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -103,12 +105,7 @@ def build_cot_prompt(input_text: str) -> str:
 def build_value_prompt(
     states: list[State],
 ) -> str:
-    """
-    构造 Qwen 的状态评价 prompt。
-
-    候选操作由程序生成。
-    Qwen 不生成操作，只评价每个状态继续得到 24 的希望。
-    """
+    """Build the state-value prompt; candidates are generated in code."""
     lines = [
         (
             "Evaluate whether each remaining-number state "

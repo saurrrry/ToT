@@ -1,3 +1,5 @@
+"""Programmatic successor generation for Game24 states."""
+
 from __future__ import annotations
 
 from fractions import Fraction
@@ -14,24 +16,13 @@ from solvers.game24_tot.state import (
 def generate_successors(
     state: State,
 ) -> list[State]:
-    """
-    程序化生成当前状态的所有合法子状态。
-
-    每次：
-
-    1. 选择两个剩余项；
-    2. 对它们执行一种四则运算；
-    3. 删除原来的两个项；
-    4. 加入新产生的项。
-
-    模型不参与候选操作生成。
-    """
+    """Generate every legal successor state without model involvement."""
     if len(state.terms) < 2:
         return []
 
     successors: list[State] = []
 
-    # 在同一个父状态内，根据剩余值去重。
+    # Deduplicate equivalent children from the same parent state.
     seen_keys: set[
         tuple[tuple[int, int], ...]
     ] = set()
@@ -93,15 +84,7 @@ def _generate_operations(
         str,
     ]
 ]:
-    """
-    生成两个项之间所有合法运算。
-
-    返回值中每个元素包含：
-
-        result_value
-        result_expression
-        readable_step
-    """
+    """Generate all legal operations between two terms."""
     operations: list[
         tuple[
             Fraction,
@@ -116,7 +99,7 @@ def _generate_operations(
     left_expression = left.expression
     right_expression = right.expression
 
-    # 加法满足交换律，因此只生成一个方向。
+    # Addition and multiplication are commutative, so one order is enough.
     add_value = left_value + right_value
 
     operations.append(
@@ -135,7 +118,6 @@ def _generate_operations(
         )
     )
 
-    # 乘法满足交换律，因此只生成一个方向。
     multiply_value = left_value * right_value
 
     operations.append(
@@ -154,7 +136,7 @@ def _generate_operations(
         )
     )
 
-    # 减法不满足交换律，需要生成两个方向。
+    # Subtraction and division need both operand orders.
     subtract_lr = left_value - right_value
 
     operations.append(
@@ -191,7 +173,6 @@ def _generate_operations(
         )
     )
 
-    # 除法需要避免除以零。
     if right_value != 0:
         divide_lr = left_value / right_value
 
@@ -239,9 +220,7 @@ def _format_step(
     right: Term,
     result: Fraction,
 ) -> str:
-    """
-    生成方便记录和输出的步骤文本。
-    """
+    """Format one arithmetic step for logs and result JSON."""
     return (
         f"{format_fraction(left.value)} "
         f"{operator} "

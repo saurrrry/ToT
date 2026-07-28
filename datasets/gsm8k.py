@@ -1,3 +1,5 @@
+"""GSM8K dataset loading and normalization."""
+
 from __future__ import annotations
 
 import json
@@ -29,6 +31,7 @@ def load_gsm8k_dataset(
     seed: int = 42,
     limit: int | None = None,
 ) -> list[GSM8KSample]:
+    """Load GSM8K samples from JSON or JSONL."""
     dataset_path = Path(path)
 
     if not dataset_path.exists():
@@ -61,6 +64,7 @@ def load_gsm8k_dataset(
 
 
 def _load_items(path: Path) -> list[dict[str, Any]]:
+    """Read either a JSON list or a JSONL file."""
     text = path.read_text(encoding="utf-8").strip()
 
     if not text:
@@ -101,6 +105,7 @@ def _parse_sample(
     item: dict[str, Any],
     index: int,
 ) -> GSM8KSample:
+    """Validate one raw GSM8K record."""
     if "question" not in item:
         raise ValueError(
             f"Missing question in GSM8K item {index}"
@@ -143,6 +148,7 @@ def _parse_sample(
 
 
 def _extract_final_answer(answer: str) -> str:
+    """Extract the final answer after GSM8K's #### marker."""
     marker = "####"
     if marker not in answer:
         return answer.strip()

@@ -1,3 +1,5 @@
+"""Beam BFS search for GSM8K Tree-of-Thoughts."""
+
 from __future__ import annotations
 
 from collections.abc import Callable

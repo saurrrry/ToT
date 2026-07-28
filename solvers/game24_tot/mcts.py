@@ -1,3 +1,5 @@
+"""Value-prior MCTS for Game24 ToT."""
+
 from __future__ import annotations
 
 import math
@@ -24,7 +26,7 @@ class MCTSNode:
         default_factory=list,
     )
 
-    # 尚未扩展的子状态及其模型先验分数。
+    # Unexpanded children paired with model priors.
     untried_children: list[
         tuple[
             State,
@@ -39,7 +41,7 @@ class MCTSNode:
     visits: int = 0
     value_sum: float = 0.0
 
-    # 模型对当前节点的先验评价。
+    # Model prior for this node.
     prior: float = 0.5
 
     @property
@@ -89,13 +91,7 @@ def mcts_search(
     def initialize_node(
         node: MCTSNode,
     ) -> None:
-        """
-        第一次访问节点时：
-
-        1. 程序生成全部子节点；
-        2. 模型批量评价；
-        3. 按评分从高到低保存为未扩展节点。
-        """
+        """Generate and score children the first time a node is visited."""
         nonlocal generated_nodes
 
         if node.initialized:
@@ -134,10 +130,7 @@ def mcts_search(
         node = root
         path = [node]
 
-        # 1. Selection
-        #
-        # 如果节点没有未扩展子节点，
-        # 就使用 UCT 选择一个已有子节点。
+        # Selection: descend by UCT once all immediate children are expanded.
         while True:
             if node.state.is_goal():
                 found_solution = node.state
@@ -191,8 +184,7 @@ def mcts_search(
             reward = 0.0
 
         else:
-            # 节点生成时已经由模型赋予 prior，
-            # 使用该 prior 作为叶节点价值。
+            # This variant uses the model prior as the leaf value.
             reward = node.prior
 
         # 4. Backpropagation
@@ -230,14 +222,7 @@ def _select_child(
     prior_weight: float,
     random_generator: random.Random,
 ) -> MCTSNode:
-    """
-    使用带先验项的 UCT 选择子节点。
-
-    score =
-        exploitation
-        + exploration
-        + prior bonus
-    """
+    """Select a child using UCT with a small model-prior bonus."""
     parent_visits = max(
         node.visits,
         1,

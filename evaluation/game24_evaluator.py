@@ -1,3 +1,5 @@
+"""Evaluation loop for Game24 solvers."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -22,26 +24,7 @@ def evaluate_game24(
     results_dir: str | Path,
     run_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """
-    在一组 Game of 24 样本上评价一个 solver。
-
-    支持：
-        baseline
-        cot
-        tot_bfs
-        tot_dfs
-        tot_astar
-        tot_mcts
-
-    对每个样本执行：
-
-        1. 调用 solver；
-        2. 获取最终表达式；
-        3. 使用 verifier 验证；
-        4. 输出题目、表达式和验证结果；
-        5. 保存模型和搜索统计；
-        6. 最终计算并保存准确率。
-    """
+    """Evaluate one solver on Game24 samples and save result JSON."""
     sample_results: list[dict[str, Any]] = []
 
     correct_count = 0
@@ -50,10 +33,7 @@ def evaluate_game24(
     total_completion_tokens = 0
     total_duration_seconds = 0.0
 
-    # ToT 搜索相关统计。
-    #
-    # Baseline 和 CoT 没有这些字段，
-    # 因此它们会保持为 0。
+    # Baseline and CoT leave search metrics at zero.
     total_model_calls = 0
     total_expanded_nodes = 0
     total_generated_nodes = 0
@@ -64,15 +44,7 @@ def evaluate_game24(
         samples,
         start=1,
     ):
-        # 每道题使用不同但可复现的模型随机种子。
-        #
-        # 例如：
-        #     实验 seed = 42
-        #
-        # 那么：
-        #     第 1 题 seed = 42
-        #     第 2 题 seed = 43
-        #     第 3 题 seed = 44
+        # Give each sample a distinct but reproducible generation seed.
         sample_seed = seed + index - 1
 
         try:
@@ -100,12 +72,7 @@ def evaluate_game24(
             error_message = None
 
         except Exception as exc:
-            # 单个样本出现异常时不终止整个实验。
-            #
-            # 例如：
-            #     Ollama 请求失败
-            #     模型返回格式异常
-            #     搜索算法出现运行时错误
+            # Keep long experiment runs going when one sample fails.
             expression = None
 
             verification = VerificationResult(
@@ -149,19 +116,7 @@ def evaluate_game24(
             duration_seconds = None
             solver_metadata = {}
 
-        # 从 ToT metadata 中提取搜索统计。
-        #
-        # 预期结构：
-        #
-        # metadata = {
-        #     "search": {
-        #         "expanded_nodes": ...,
-        #         "generated_nodes": ...,
-        #     },
-        #     "value_evaluator": {
-        #         "model_calls": ...,
-        #     },
-        # }
+        # Extract search metrics when the solver provides them.
         search_metadata = solver_metadata.get(
             "search",
             {},
@@ -185,10 +140,6 @@ def evaluate_game24(
         total_generated_nodes += generated_nodes
         total_model_calls += model_calls
 
-        # ----------------------------------------------------
-        # 终端输出
-        # ----------------------------------------------------
-
         print(
             f"[{index}/{total_samples}] "
             f"id={sample.id} "
@@ -211,7 +162,6 @@ def evaluate_game24(
             f"({verification.reason})"
         )
 
-        # 对 ToT 搜索额外输出搜索统计。
         if search_metadata:
             print(
                 "Search: "
@@ -295,13 +245,11 @@ def evaluate_game24(
         else 0.0
     )
 
-    # 用户要求最后输出一行准确率。
     print(
         f"Accuracy: {correct_count}/{total_samples} "
         f"= {accuracy:.2%}"
     )
 
-    # ToT 方法额外输出总体搜索统计。
     if solver.name.startswith("tot_"):
         print(
             "Search summary: "
@@ -314,9 +262,7 @@ def evaluate_game24(
         "%Y%m%d_%H%M%S"
     )
 
-    # 文件名中不能直接保留 :、/、\。
-    #
-    # qwen2.5:7b 会变成 qwen2.5_7b。
+    # Keep model names safe for filenames.
     safe_model_name = (
         model_name
         .replace(":", "_")
@@ -347,10 +293,7 @@ def evaluate_game24(
             "total": total_samples,
             "correct": correct_count,
 
-            # 0 到 1 之间。
             "accuracy": accuracy,
-
-            # 百分比形式，例如 80.0。
             "accuracy_percent": accuracy * 100,
 
             "total_prompt_tokens": (
@@ -366,10 +309,6 @@ def evaluate_game24(
                 average_duration_seconds
             ),
 
-            # 搜索统计。
-            #
-            # Baseline 和 CoT 会为 0；
-            # ToT 方法会记录真实值。
             "total_model_calls": total_model_calls,
             "average_model_calls": (
                 average_model_calls
@@ -408,27 +347,7 @@ def _build_output_path(
     solver_name: str,
     output_filename: str,
 ) -> Path:
-    """
-    根据 solver 类型生成结果保存路径。
-
-    Baseline:
-        results/game24/baseline/xxx.json
-
-    CoT:
-        results/game24/cot/xxx.json
-
-    ToT-BFS:
-        results/game24/tot/bfs/xxx.json
-
-    ToT-DFS:
-        results/game24/tot/dfs/xxx.json
-
-    ToT-A*:
-        results/game24/tot/astar/xxx.json
-
-    ToT-MCTS:
-        results/game24/tot/mcts/xxx.json
-    """
+    """Build the result path, grouping ToT outputs by strategy."""
     base_path = Path(results_dir) / "game24"
 
     if solver_name.startswith("tot_"):
@@ -453,11 +372,7 @@ def _build_output_path(
 def _safe_int(
     value: Any,
 ) -> int:
-    """
-    将 metadata 中的统计值安全转换成整数。
-
-    非整数或缺失值统一返回 0。
-    """
+    """Convert optional metadata counters to integers."""
     if isinstance(value, bool):
         return 0
 

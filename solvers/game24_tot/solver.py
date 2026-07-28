@@ -1,3 +1,5 @@
+"""Game24 Tree-of-Thoughts solver orchestration."""
+
 from __future__ import annotations
 
 import json
@@ -47,17 +49,7 @@ RATING_SCORES = {
 
 
 class StateValueEvaluator:
-    """
-    使用 Qwen 对中间状态进行批量评价。
-
-    该类同时负责：
-
-    1. prompt 构造；
-    2. 模型调用；
-    3. JSON 解析；
-    4. 状态评价缓存；
-    5. token 和时间统计。
-    """
+    """Batch-score intermediate Game24 states and cache results."""
 
     def __init__(
         self,
@@ -90,13 +82,11 @@ class StateValueEvaluator:
         self,
         states: list[State],
     ) -> list[float]:
-        """
-        按输入顺序返回每个状态的分数。
-        """
+        """Return one score per input state, preserving order."""
         if not states:
             return []
 
-        # 同一批中也可能存在重复状态。
+        # Deduplicate within the same batch before calling the model.
         unique_uncached: list[State] = []
         pending_keys: set[
             tuple[tuple[int, int], ...]
@@ -210,12 +200,7 @@ class StateValueEvaluator:
 
 
 class Game24ToTSolver(BaseSolver):
-    """
-    Game of 24 的统一搜索 solver。
-
-    候选节点由程序生成，
-    Qwen 只负责评价节点。
-    """
+    """Unified Game24 ToT solver with programmatic candidates."""
 
     def __init__(
         self,
@@ -265,15 +250,7 @@ class Game24ToTSolver(BaseSolver):
 
     @property
     def name(self) -> str:
-        """
-        保存结果时使用不同方法名。
-
-        例如：
-            tot_bfs
-            tot_dfs
-            tot_astar
-            tot_mcts
-        """
+        """Expose the strategy-specific result name."""
         return f"tot_{self.strategy}"
 
     def solve(
@@ -400,11 +377,7 @@ class Game24ToTSolver(BaseSolver):
             },
         }
 
-        # ToT 搜索包含多次模型调用，
-        # 不存在唯一的 raw response。
-        #
-        # 这里保存所有评价调用的 JSON 文本，
-        # 方便与现有 evaluator 接口兼容。
+        # ToT has many model responses, so store all value logs together.
         raw_response = json.dumps(
             value_evaluator.evaluation_logs,
             ensure_ascii=False,
@@ -414,8 +387,7 @@ class Game24ToTSolver(BaseSolver):
             expression=expression,
             raw_response=raw_response,
 
-            # ToT 没有唯一 prompt。
-            # 详细 prompt 已保存在 metadata logs 中。
+            # Individual prompts are available in metadata logs.
             prompt="",
 
             duration_seconds=(

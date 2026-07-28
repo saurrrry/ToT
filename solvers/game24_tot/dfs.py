@@ -1,3 +1,5 @@
+"""Model-guided DFS search for Game24 ToT."""
+
 from __future__ import annotations
 
 from solvers.game24_tot.generator import (
@@ -17,14 +19,7 @@ def dfs_search(
     branch_limit: int | None = None,
     max_expanded_nodes: int = 1000,
 ) -> SearchResult:
-    """
-    模型引导的深度优先搜索。
-
-    branch_limit:
-        每个节点最多深入多少个候选。
-
-        None 表示所有候选都可能被搜索。
-    """
+    """Run model-guided depth-first search."""
     if initial_state.is_goal():
         return SearchResult(
             solution=initial_state,
@@ -62,7 +57,7 @@ def dfs_search(
         children = generate_successors(state)
         generated_nodes += len(children)
 
-        # 程序生成后立即检查精确目标。
+        # Exact goals do not need model scoring.
         for child in children:
             if child.is_goal():
                 trace.append(

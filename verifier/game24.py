@@ -1,3 +1,5 @@
+"""Exact verifier for Game24 arithmetic expressions."""
+
 from __future__ import annotations
 
 import ast
